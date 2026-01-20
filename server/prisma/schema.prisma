@@ -1,0 +1,366 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum QuizType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SHORT_ANSWER
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  ALL_LEVELS
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  password        String?
+  name            String
+  avatar          String?
+  role            UserRole  @default(STUDENT)
+  bio             String?
+  isEmailVerified Boolean   @default(false)
+  isDeleted       Boolean   @default(false) // Soft Delete flag
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  createdCourses Course[]      @relation("InstructorCourses")
+  enrollments    Enrollment[]
+  reviews        Review[]
+  quizAttempts   QuizAttempt[]
+  certificates   Certificate[]
+  payments       Payment[]
+  discussions    Discussion[]
+  replies        Reply[]
+  notifications  Notification[]
+
+  @@index([email])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  icon        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courses Course[]
+
+  @@index([slug])
+}
+
+model Course {
+  id               String      @id @default(uuid())
+  title            String
+  slug             String      @unique
+  description      String
+  thumbnail        String?
+  price            Float
+  discountPrice    Float?
+  level            CourseLevel @default(ALL_LEVELS)
+  language         String      @default("English")
+  requirements     String[]
+  whatYouWillLearn String[]
+  isPublished      Boolean     @default(false)
+  isDeleted        Boolean     @default(false) // Soft Delete flag
+  
+  // Changed to optional to prevent deleting course if Instructor is deleted
+  instructorId     String?     
+  categoryId       String
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  // Relations
+  // Changed onDelete to SetNull for safety
+  instructor   User?         @relation("InstructorCourses", fields: [instructorId], references: [id], onDelete: SetNull) 
+  category     Category      @relation(fields: [categoryId], references: [id])
+  sections     Section[]
+  enrollments  Enrollment[]
+  reviews      Review[]
+  certificates Certificate[]
+  payments     Payment[]     // Added missing relation array
+
+  @@index([slug])
+  @@index([instructorId])
+  @@index([categoryId])
+  @@index([isPublished])
+}
+
+model Section {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  order       Int
+  courseId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  course  Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  videoUrl    String?
+  videoLength Int? // in seconds
+  isFree      Boolean  @default(false)
+  order       Int
+  sectionId   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  section     Section          @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  resources   Resource[]
+  progress    LessonProgress[]
+  quiz        Quiz?
+  discussions Discussion[]     // Added relation for lesson-specific discussions
+
+  @@index([sectionId])
+}
+
+model Resource {
+  id        String   @id @default(uuid())
+  title     String
+  fileUrl   String
+  fileType  String // pdf, zip, doc, etc.
+  fileSize  Int // in bytes
+  lessonId  String
+  createdAt DateTime @default(now())
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+}
+
+model Quiz {
+  id           String   @id @default(uuid())
+  title        String
+  description  String?
+  passingScore Int      @default(70)
+  timeLimit    Int? // in minutes
+  lessonId     String   @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  lesson    Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions Question[]
+  attempts  QuizAttempt[]
+}
+
+model Question {
+  id            String   @id @default(uuid())
+  question      String
+  type          QuizType
+  options       Json     // Changed from String[] to Json for better structure
+  correctAnswer String
+  explanation   String?
+  points        Int      @default(1)
+  order         Int
+  quizId        String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  quiz    Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers Answer[]
+
+  @@index([quizId])
+}
+
+model Enrollment {
+  id          String           @id @default(uuid())
+  status      EnrollmentStatus @default(ACTIVE)
+  progress    Int              @default(0) // 0-100
+  enrolledAt  DateTime         @default(now())
+  completedAt DateTime?
+  userId      String
+  courseId    String
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course         Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  lessonProgress LessonProgress[]
+
+  @@unique([userId, courseId])
+  @@index([userId])
+  @@index([courseId])
+}
+
+model LessonProgress {
+  id             String    @id @default(uuid())
+  isCompleted    Boolean   @default(false)
+  watchedSeconds Int       @default(0)
+  completedAt    DateTime?
+  enrollmentId   String
+  lessonId       String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lesson     Lesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, lessonId])
+  @@index([enrollmentId])
+  @@index([lessonId])
+}
+
+model QuizAttempt {
+  id          String    @id @default(uuid())
+  score       Int
+  totalPoints Int
+  passed      Boolean
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  userId      String
+  quizId      String
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz    Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  answers Answer[]
+
+  @@index([userId])
+  @@index([quizId])
+}
+
+model Answer {
+  id           String   @id @default(uuid())
+  answer       String
+  isCorrect    Boolean
+  pointsEarned Int
+  attemptId    String
+  questionId   String
+  createdAt    DateTime @default(now())
+
+  attempt  QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId])
+  @@index([questionId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int // 1-5
+  comment   String?
+  userId    String
+  courseId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([courseId])
+}
+
+model Certificate {
+  id             String   @id @default(uuid())
+  certificateUrl String
+  issuedAt       DateTime @default(now())
+  userId         String
+  courseId       String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, courseId])
+  @@index([userId])
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  amount          Float
+  currency        String        @default("usd")
+  status          PaymentStatus @default(PENDING)
+  stripePaymentId String?       @unique
+  userId          String
+  courseId        String?       // Kept optional because a user might pay for a cart of items (future proofing) or a subscription
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  course Course? @relation(fields: [courseId], references: [id], onDelete: SetNull) // Fixed: Added Relation
+
+  @@index([userId])
+  @@index([stripePaymentId])
+}
+
+model Discussion {
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  userId    String
+  courseId  String
+  lessonId  String?  // Added: Link discussion to specific lesson
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson  Lesson? @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  replies Reply[]
+
+  @@index([courseId])
+  @@index([lessonId])
+  @@index([userId])
+}
+
+model Reply {
+  id           String   @id @default(uuid())
+  content      String
+  userId       String
+  discussionId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discussion Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+
+  @@index([discussionId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  userId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+}
