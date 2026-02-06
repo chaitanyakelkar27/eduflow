@@ -2,7 +2,7 @@ export interface RegisterDTO {
     email: string;
     password: string;
     name: string;
-    role?: 'student' | 'instructor';
+    role?: 'STUDENT' | 'INSTRUCTOR';
 }
 
 export interface LoginDTO {
