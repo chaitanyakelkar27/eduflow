@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 540" role="img" aria-label="Design course">
+  <rect width="900" height="540" fill="#f3efe2"/>
+  <rect x="80" y="72" width="740" height="396" rx="38" fill="#fff" fill-opacity="0.88"/>
+  <rect x="150" y="152" width="240" height="240" rx="30" fill="#2d6a4f" fill-opacity="0.18"/>
+  <rect x="430" y="170" width="300" height="22" rx="11" fill="#2d6a4f" fill-opacity="0.24"/>
+  <rect x="430" y="218" width="250" height="16" rx="8" fill="#2d6a4f" fill-opacity="0.15"/>
+  <rect x="430" y="248" width="220" height="16" rx="8" fill="#2d6a4f" fill-opacity="0.15"/>
+  <rect x="430" y="320" width="150" height="42" rx="21" fill="#2d6a4f" fill-opacity="0.22"/>
+</svg>
